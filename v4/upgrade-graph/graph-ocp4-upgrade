@@ -1,0 +1,43 @@
+#!/bin/bash
+
+
+if [ -z $1 ]; then
+	echo "Must specify branch-version, i.e., stable-4.4, fast-4.5, etc."
+	exit 1
+fi
+
+# vars
+
+VERS=$1
+
+# functions
+
+graph() {
+JQ_SCRIPT='"digraph Upgrades {\n  labelloc=t;\n  rankdir=BT;" as $header |
+  (
+    [
+      .nodes |
+      to_entries[] |
+      "  " + (.key | tostring) +
+             " [ label=\"" + .value.version + "\"" + (
+               if .value.metadata.url then " href=\"" + .value.metadata.url + "\"" else "" end
+             ) +
+             " ];"
+    ] | join("\n")
+  ) as $nodes |
+  (
+    [
+      .edges[] |
+      "  " + (.[0] | tostring) + "->" + (.[1] | tostring) + ";"
+    ] | join("\n")
+  ) as $edges |
+  [$header, $nodes, $edges, "}"] | join("\n")
+'
+
+exec jq -r "${JQ_SCRIPT}"
+}
+
+# main
+
+curl -sH 'Accept:application/json' "https://api.openshift.com/api/upgrades_info/v1/graph?channel=${VERS}&arch=amd64" | graph | dot -Tsvg > /tmp/graph.svg && eog /tmp/graph.svg &
+
